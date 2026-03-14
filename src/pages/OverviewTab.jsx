@@ -4,11 +4,16 @@ import { Chip } from "@/components/ui/Chip";
 import { TrendIndicator } from "@/components/ui/TrendIndicator";
 import { AreaChartWrapper } from "@/components/charts/AreaChartWrapper";
 import { PieChartWrapper } from "@/components/charts/PieChartWrapper";
-import { ALERTS_DATA, PRODUCTS, AGENTS, REV_DATA, PIE_DATA } from "@/data/mockData";
+import { ALERTS_DATA, AGENTS } from "@/data/mockData";
 import { formatRp, formatRpCompact } from "@/lib/formatters";
 import { ChevronRight, DollarSign, Eye, Target, Users, Zap } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3002";
+
+const RANGE_LABEL = {
+  "1": "Hari Ini", "7": "7 Hari", "30": "30 Hari",
+  "90": "3 Bulan", "180": "6 Bulan", "365": "1 Tahun",
+};
 
 async function fetchUptimeRobot(apiKey) {
   const res = await fetch("/api/uptimerobot/v2/getMonitors", {
@@ -22,73 +27,86 @@ async function fetchUptimeRobot(apiKey) {
   return data.monitors || [];
 }
 
-export function OverviewTab({ settings }) {
+export function OverviewTab({ settings, dateRange = "7" }) {
   const highAlerts = ALERTS_DATA.filter(a => a.level === "critical" || a.level === "high");
   const [uptimeData, setUptimeData] = useState(null);
   const [revenueData, setRevenueData] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [studentsData, setStudentsData] = useState(null);
   const [ga4Data, setGa4Data] = useState({ activeUsers: 0, sessions: 0, pageViews: 0, users: 0, topPages: [] });
   const [gscData, setGscData] = useState({ clicks: 0, impressions: 0, ctr: "0.0", position: "0.0", keywords: [] });
 
   const apiKey = settings?.connectionCredentials?.uptimerobot?.apiKey || "";
   const ga4PropertyId = settings?.connectionCredentials?.ga4?.propertyId || "";
   const gscSiteUrl = settings?.connectionCredentials?.searchConsole?.siteUrl || "";
+  const rangeLabel = RANGE_LABEL[dateRange] || `${dateRange} Hari`;
 
+  // UptimeRobot — tidak perlu dateRange
   useEffect(() => {
     if (!apiKey) return;
     fetchUptimeRobot(apiKey)
-      .then(monitors => setUptimeData(monitors && monitors[0] ? monitors[0] : null))
+      .then(monitors => setUptimeData(monitors?.[0] || null))
       .catch(() => {});
   }, [apiKey]);
 
+  // Revenue + Products — pakai dateRange
   useEffect(() => {
-    fetch(`${API_BASE}/api/revenue/today`)
-      .then(r => r.json())
-      .then(data => setRevenueData(data))
-      .catch(() => {});
-  }, []);
+    Promise.all([
+      fetch(`${API_BASE}/api/revenue/today?days=${dateRange}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/products/top?days=${dateRange}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/students/summary?days=${dateRange}`).then(r => r.json()),
+    ]).then(([rev, prod, stu]) => {
+      setRevenueData(rev.error ? null : rev);
+      setProducts(Array.isArray(prod) ? prod : []);
+      setStudentsData(stu.error ? null : stu);
+    }).catch(() => {});
+  }, [dateRange]);
 
+  // GA4 — pakai dateRange
   useEffect(() => {
     if (!ga4PropertyId) return;
-    const fetchGA4Data = async () => {
+    const fetchGA4 = async () => {
       try {
-        const [realtimeRes, todayRes, pagesRes] = await Promise.all([
+        const [rt, td, pg] = await Promise.all([
           fetch(`${API_BASE}/api/ga4/realtime`),
-          fetch(`${API_BASE}/api/ga4/today`),
-          fetch(`${API_BASE}/api/ga4/top-pages`),
+          fetch(`${API_BASE}/api/ga4/today?days=${dateRange}`),
+          fetch(`${API_BASE}/api/ga4/top-pages?days=${dateRange}`),
         ]);
-        if (realtimeRes.ok && todayRes.ok && pagesRes.ok) {
-          const realtime = await realtimeRes.json();
-          const today = await todayRes.json();
-          const pages = await pagesRes.json();
+        if (rt.ok && td.ok && pg.ok) {
+          const realtime = await rt.json();
+          const today = await td.json();
+          const pages = await pg.json();
           setGa4Data({ activeUsers: realtime.activeUsers, sessions: today.sessions, pageViews: today.pageViews, users: today.users, topPages: pages });
         }
       } catch {}
     };
-    fetchGA4Data();
-    const interval = setInterval(fetchGA4Data, 30000);
+    fetchGA4();
+    const interval = setInterval(fetchGA4, 30000);
     return () => clearInterval(interval);
-  }, [ga4PropertyId]);
+  }, [ga4PropertyId, dateRange]);
 
+  // GSC — pakai dateRange
   useEffect(() => {
     if (!gscSiteUrl) return;
-    const fetchGSCData = async () => {
+    const fetchGSC = async () => {
       try {
-        const [summaryRes, keywordsRes] = await Promise.all([
-          fetch(`${API_BASE}/api/gsc/summary`),
-          fetch(`${API_BASE}/api/gsc/keywords`),
+        const [sumRes, kwRes] = await Promise.all([
+          fetch(`${API_BASE}/api/gsc/summary?days=${dateRange}`),
+          fetch(`${API_BASE}/api/gsc/keywords?days=${dateRange}`),
         ]);
-        if (summaryRes.ok && keywordsRes.ok) {
-          const summary = await summaryRes.json();
-          const keywords = await keywordsRes.json();
+        if (sumRes.ok && kwRes.ok) {
+          const summary = await sumRes.json();
+          const keywords = await kwRes.json();
           setGscData({ ...summary, keywords });
         }
       } catch {}
     };
-    fetchGSCData();
-    const interval = setInterval(fetchGSCData, 60000);
+    fetchGSC();
+    const interval = setInterval(fetchGSC, 60000);
     return () => clearInterval(interval);
-  }, [gscSiteUrl]);
+  }, [gscSiteUrl, dateRange]);
 
+  // Uptime calculations
   const statusMap = { 0: ["Paused","#475569"], 1: ["Checking","#94a3b8"], 2: ["UP","#10b981"], 8: ["Seems Down","#f59e0b"], 9: ["DOWN","#ef4444"] };
   const [statusLabel, uptimeColor] = uptimeData ? (statusMap[uptimeData.status] || ["Unknown","#475569"]) : ["–","#f59e0b"];
   const ratios = uptimeData?.custom_uptime_ratio?.split("-") || [];
@@ -101,13 +119,13 @@ export function OverviewTab({ settings }) {
 
   const revenue = revenueData?.revenue || 0;
   const transactions = revenueData?.transactions || 0;
-  const revenueDisplay = revenue > 0 ? `Rp ${(revenue / 1000).toFixed(0)}K` : "Rp 0";
-  const revenueSub = transactions > 0 ? `${transactions} transaksi` : "Belum ada transaksi";
+  const newStudents = studentsData?.newToday || 0;
+  const totalStudents = studentsData?.totalStudents || 0;
 
   const kpiCards = [
-    { icon: DollarSign, label: "Revenue Hari Ini", value: revenueDisplay, sub: revenueSub, trend: 0, color: "#7c3aed" },
-    { icon: Users, label: "Siswa Baru", value: "12", sub: "1,234 total aktif", trend: 2, color: "#06b6d4" },
-    { icon: Eye, label: "Traffic", value: ga4PropertyId ? ga4Data.users.toLocaleString("id-ID") : "1,456", sub: ga4PropertyId ? `${ga4Data.sessions} sessions hari ini` : "68% organik", trend: 8, color: "#10b981" },
+    { icon: DollarSign, label: `Revenue ${rangeLabel}`, value: revenue > 0 ? formatRpCompact(revenue) : "Rp 0", sub: `${transactions} transaksi`, trend: 0, color: "#7c3aed" },
+    { icon: Users, label: "Siswa Baru", value: newStudents || "–", sub: `${totalStudents} total pembeli`, trend: 0, color: "#06b6d4" },
+    { icon: Eye, label: "Traffic", value: ga4PropertyId ? ga4Data.users.toLocaleString("id-ID") : "–", sub: ga4PropertyId ? `${ga4Data.sessions} sessions` : "Sambungkan GA4", trend: 0, color: "#10b981" },
     { icon: Zap, label: "Uptime", value: uptimeValue, sub: uptimeSub, trend: 0, color: uptimeColor },
   ];
 
@@ -131,42 +149,42 @@ export function OverviewTab({ settings }) {
         ))}
       </div>
 
-      {/* GA4 + GSC Stats Row — conditional */}
+      {/* GA4 + GSC Stats Row */}
       {(ga4PropertyId || gscSiteUrl) && (
         <div className="grid gap-4" style={{ gridTemplateColumns: ga4PropertyId && gscSiteUrl ? "1fr 1fr" : "1fr" }}>
           {ga4PropertyId && (
-            <div className="rounded-xl px-5 py-5" style={{ background: "#0f1a2e", border: "1px solid #1e3a5f" }}>
-              <p className="text-[11px] font-semibold tracking-widest uppercase mb-4" style={{ color: "#5b9bd5" }}>Google Analytics 4</p>
+            <div className="rounded-xl px-5 py-5 bg-card border border-border">
+              <p className="text-[11px] font-semibold tracking-widest uppercase mb-4 text-blue-400">Google Analytics 4 · {rangeLabel}</p>
               <div className="grid grid-cols-2 gap-4">
                 {[
                   { label: "Active Users", value: ga4Data.activeUsers, sub: "realtime" },
-                  { label: "Sessions", value: ga4Data.sessions.toLocaleString("id-ID"), sub: "hari ini" },
-                  { label: "Page Views", value: ga4Data.pageViews.toLocaleString("id-ID"), sub: "hari ini", border: true },
-                  { label: "Traffic", value: ga4Data.users.toLocaleString("id-ID"), sub: "users hari ini", border: true },
+                  { label: "Sessions", value: ga4Data.sessions.toLocaleString("id-ID"), sub: rangeLabel },
+                  { label: "Page Views", value: ga4Data.pageViews.toLocaleString("id-ID"), sub: rangeLabel },
+                  { label: "Users", value: ga4Data.users.toLocaleString("id-ID"), sub: rangeLabel },
                 ].map((m, i) => (
-                  <div key={i} style={m.border ? { borderTop: "0.5px solid #1e3a5f", paddingTop: 14 } : {}}>
-                    <p className="text-xs mb-1" style={{ color: "#4a7fa8" }}>{m.label}</p>
-                    <p className="text-3xl font-medium" style={{ color: "#e2f0ff" }}>{m.value}</p>
-                    <p className="text-[11px] mt-1" style={{ color: "#4a7fa8" }}>{m.sub}</p>
+                  <div key={i} className={i >= 2 ? "border-t border-border pt-3" : ""}>
+                    <p className="text-xs text-muted-foreground mb-1">{m.label}</p>
+                    <p className="text-3xl font-semibold text-foreground">{m.value}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{m.sub}</p>
                   </div>
                 ))}
               </div>
             </div>
           )}
           {gscSiteUrl && (
-            <div className="rounded-xl px-5 py-5" style={{ background: "#0f2318", border: "1px solid #1a4a2e" }}>
-              <p className="text-[11px] font-semibold tracking-widest uppercase mb-4" style={{ color: "#4db87a" }}>Search Console</p>
+            <div className="rounded-xl px-5 py-5 bg-card border border-border">
+              <p className="text-[11px] font-semibold tracking-widest uppercase mb-4 text-emerald-400">Search Console · {rangeLabel}</p>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  { label: "Total Clicks", value: gscData.clicks, sub: "7 hari terakhir" },
-                  { label: "Impressions", value: gscData.impressions.toLocaleString("id-ID"), sub: "7 hari terakhir" },
-                  { label: "CTR", value: `${gscData.ctr}%`, sub: "7 hari terakhir", border: true },
-                  { label: "Avg Position", value: `#${gscData.position}`, sub: "7 hari terakhir", border: true },
+                  { label: "Total Clicks", value: gscData.clicks, sub: rangeLabel },
+                  { label: "Impressions", value: gscData.impressions.toLocaleString("id-ID"), sub: rangeLabel },
+                  { label: "CTR", value: `${gscData.ctr}%`, sub: rangeLabel },
+                  { label: "Avg Position", value: `#${gscData.position}`, sub: rangeLabel },
                 ].map((m, i) => (
-                  <div key={i} style={m.border ? { borderTop: "0.5px solid #1a4a2e", paddingTop: 14 } : {}}>
-                    <p className="text-xs mb-1" style={{ color: "#3a7a55" }}>{m.label}</p>
-                    <p className="text-3xl font-medium" style={{ color: "#e2ffe8" }}>{m.value}</p>
-                    <p className="text-[11px] mt-1" style={{ color: "#3a7a55" }}>{m.sub}</p>
+                  <div key={i} className={i >= 2 ? "border-t border-border pt-3" : ""}>
+                    <p className="text-xs text-muted-foreground mb-1">{m.label}</p>
+                    <p className="text-3xl font-semibold text-foreground">{m.value}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{m.sub}</p>
                   </div>
                 ))}
               </div>
@@ -174,35 +192,6 @@ export function OverviewTab({ settings }) {
           )}
         </div>
       )}
-
-      {/* Charts Row — 2fr 1fr */}
-      <div className="grid gap-4" style={{ gridTemplateColumns: "2fr 1fr" }}>
-        <SectionCard>
-          <CardTitle title="Revenue 7 Hari Terakhir" sub="Daily sales performance" />
-          <AreaChartWrapper
-            data={REV_DATA}
-            series={[{ key: "rev", name: "Revenue", color: "#7c3aed" }]}
-            height={180}
-            formatter={formatRpCompact}
-          />
-        </SectionCard>
-
-        <SectionCard>
-          <CardTitle title="Traffic Sources" sub="Distribusi pengunjung" />
-          <PieChartWrapper data={PIE_DATA} height={140} innerRadius={42} outerRadius={62} />
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2.5">
-            {PIE_DATA.map((s, i) => (
-              <div key={i} className="flex justify-between items-center">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: s.color }} />
-                  <span className="text-xs text-muted-foreground">{s.name}</span>
-                </div>
-                <span className="text-xs font-semibold text-foreground">{s.value}%</span>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      </div>
 
       {/* Alerts + Opportunities */}
       <div className="grid grid-cols-2 gap-4">
@@ -262,24 +251,24 @@ export function OverviewTab({ settings }) {
         </SectionCard>
       </div>
 
-      {/* Products + Agents Mini */}
+      {/* Top Produk + Agents */}
       <div className="grid grid-cols-2 gap-4">
         <SectionCard>
-          <CardTitle title="Top Produk Hari Ini" sub="Sales & revenue breakdown" />
+          <CardTitle title={`Top Produk — ${rangeLabel}`} sub="Sales & revenue breakdown" />
           <div className="flex flex-col gap-3.5">
-            {PRODUCTS.map((p, i) => (
+            {products.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Belum ada data produk</p>
+            ) : products.map((p, i) => (
               <div key={i} className="flex gap-3 items-center">
                 <span className="text-[11px] font-bold text-muted-foreground w-5 text-right shrink-0">#{i + 1}</span>
                 <div className="flex-1">
                   <div className="flex justify-between mb-1.5">
-                    <span className="text-xs font-medium text-foreground">{p.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-foreground font-mono">{formatRp(p.revenue)}</span>
-                      <TrendIndicator value={p.change} />
-                    </div>
+                    <span className="text-xs font-medium text-foreground truncate max-w-[160px]">{p.name}</span>
+                    <span className="text-xs font-bold text-foreground font-mono">{formatRpCompact(p.revenue)}</span>
                   </div>
                   <div className="h-0.5 bg-muted rounded-full">
-                    <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-500" style={{ width: `${(p.revenue / 2250000) * 100}%` }} />
+                    <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-500"
+                      style={{ width: `${Math.min((p.revenue / (products[0]?.revenue || 1)) * 100, 100)}%` }} />
                   </div>
                   <span className="text-[10px] text-muted-foreground">{p.sales} sales</span>
                 </div>
@@ -289,7 +278,7 @@ export function OverviewTab({ settings }) {
         </SectionCard>
 
         <SectionCard>
-          <CardTitle title="🤖 Agent Status" sub="9 agents running • 0 errors" />
+          <CardTitle title="🤖 Agent Status" sub={`${AGENTS.length} agents running • 0 errors`} />
           <div className="grid grid-cols-2 gap-2">
             {AGENTS.map((a, i) => (
               <div key={i} className="flex items-center gap-2.5 px-3 py-2.5 bg-muted rounded-lg border border-border">
@@ -304,12 +293,12 @@ export function OverviewTab({ settings }) {
         </SectionCard>
       </div>
 
-      {/* Top Pages + Top Keywords — conditional */}
+      {/* Top Pages + Keywords */}
       {((ga4PropertyId && ga4Data.topPages.length > 0) || (gscSiteUrl && gscData.keywords.length > 0)) && (
         <div className="grid gap-4" style={{ gridTemplateColumns: ga4PropertyId && gscSiteUrl ? "1fr 1fr" : "1fr" }}>
           {ga4PropertyId && ga4Data.topPages.length > 0 && (
             <SectionCard>
-              <CardTitle title="Top Pages" sub="Google Analytics 4 • 7 hari" />
+              <CardTitle title="Top Pages" sub={`Google Analytics 4 · ${rangeLabel}`} />
               <table className="w-full border-collapse">
                 <thead>
                   <tr>
@@ -323,7 +312,7 @@ export function OverviewTab({ settings }) {
                     <tr key={idx} className="border-b border-border/50">
                       <td className="text-xs font-bold text-muted-foreground px-2 py-2.5 w-6">{idx + 1}</td>
                       <td className="text-xs text-foreground px-2 py-2.5 max-w-[200px] truncate">{page.title || page.path}</td>
-                      <td className="text-sm font-bold px-2 py-2.5 text-right" style={{ color: "#5b9bd5" }}>{page.views.toLocaleString("id-ID")}</td>
+                      <td className="text-sm font-bold px-2 py-2.5 text-right text-blue-400">{page.views.toLocaleString("id-ID")}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -332,7 +321,7 @@ export function OverviewTab({ settings }) {
           )}
           {gscSiteUrl && gscData.keywords.length > 0 && (
             <SectionCard>
-              <CardTitle title="Top Keywords" sub="Search Console • 7 hari" />
+              <CardTitle title="Top Keywords" sub={`Search Console · ${rangeLabel}`} />
               <table className="w-full border-collapse">
                 <thead>
                   <tr>
@@ -346,8 +335,8 @@ export function OverviewTab({ settings }) {
                     <tr key={idx} className="border-b border-border/50">
                       <td className="text-xs font-bold text-muted-foreground px-2 py-2.5 w-6">{idx + 1}</td>
                       <td className="text-xs text-foreground px-2 py-2.5">{kw.keyword}</td>
-                      <td className="text-sm font-bold px-2 py-2.5 text-right" style={{ color: "#4db87a" }}>{kw.clicks}</td>
-                      <td className="text-xs px-2 py-2.5 text-right" style={{ color: "#3a7a55" }}>{kw.ctr}%</td>
+                      <td className="text-sm font-bold px-2 py-2.5 text-right text-emerald-400">{kw.clicks}</td>
+                      <td className="text-xs px-2 py-2.5 text-right text-muted-foreground">{kw.ctr}%</td>
                       <td className="text-sm font-bold px-2 py-2.5 text-right text-amber-500">#{kw.position}</td>
                     </tr>
                   ))}

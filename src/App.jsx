@@ -52,7 +52,7 @@ export default function App() {
     revenue:     <RevenueTab dateRange={dateRange} />,
     traffic:     <TrafficTab dateRange={dateRange} />,
     students:    <StudentsTab dateRange={dateRange} />,
-    conversion:  <ConversionTab />,
+    conversion:  <ConversionTab dateRange={dateRange} />,
     email:       <EmailTab />,
     health:      <SiteHealthTab settings={settings} />,
     competitors: <CompetitorsTab refreshTrigger={competitorRefresh} />,

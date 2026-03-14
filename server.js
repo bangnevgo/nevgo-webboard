@@ -217,13 +217,15 @@ app.get('/api/ga4/today', async (req, res) => {
     const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
     const { analyticsData, authClient, propertyId } = await getGA4Client(settings);
 
-    const today = new Date().toISOString().split('T')[0];
+    const days = parseInt(req.query.days) || 1;
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const response = await analyticsData.properties.runReport({
       auth: authClient,
       property: `properties/${propertyId}`,
       requestBody: {
-        dateRanges: [{ startDate: today, endDate: today }],
+        dateRanges: [{ startDate, endDate }],
         metrics: [
           { name: 'sessions' },
           { name: 'screenPageViews' },
@@ -249,14 +251,15 @@ app.get('/api/ga4/top-pages', async (req, res) => {
     const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
     const { analyticsData, authClient, propertyId } = await getGA4Client(settings);
 
-    const today = new Date().toISOString().split('T')[0];
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const days = parseInt(req.query.days) || 7;
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const response = await analyticsData.properties.runReport({
       auth: authClient,
       property: `properties/${propertyId}`,
       requestBody: {
-        dateRanges: [{ startDate: weekAgo, endDate: today }],
+        dateRanges: [{ startDate, endDate }],
         dimensions: [{ name: 'pagePath' }, { name: 'pageTitle' }],
         metrics: [{ name: 'screenPageViews' }],
         orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
@@ -308,15 +311,16 @@ app.get('/api/gsc/summary', async (req, res) => {
     const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
     const { searchconsole, authClient, siteUrl } = await getGSCClient(settings);
 
-    const today = new Date().toISOString().split('T')[0];
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const days = parseInt(req.query.days) || 7;
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const response = await searchconsole.searchanalytics.query({
       auth: authClient,
       siteUrl,
       requestBody: {
-        startDate: weekAgo,
-        endDate: today,
+        startDate,
+        endDate,
         metrics: ['clicks', 'impressions', 'ctr', 'position'],
       },
     });
@@ -339,15 +343,16 @@ app.get('/api/gsc/keywords', async (req, res) => {
     const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
     const { searchconsole, authClient, siteUrl } = await getGSCClient(settings);
 
-    const today = new Date().toISOString().split('T')[0];
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const days = parseInt(req.query.days) || 7;
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const response = await searchconsole.searchanalytics.query({
       auth: authClient,
       siteUrl,
       requestBody: {
-        startDate: weekAgo,
-        endDate: today,
+        startDate,
+        endDate,
         dimensions: ['query'],
         metrics: ['clicks', 'impressions', 'ctr', 'position'],
         rowLimit: 10,

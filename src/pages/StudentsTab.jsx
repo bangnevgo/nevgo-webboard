@@ -19,7 +19,7 @@ export function StudentsTab({ dateRange = "30" }) {
       setSummary(s.error ? null : s);
       setTrend(Array.isArray(t) ? t : []);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  }, [dateRange]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
