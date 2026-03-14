@@ -15,13 +15,14 @@ import { AIInsightTab } from "@/pages/AIInsightTab";
 import { SettingsTab } from "@/pages/SettingsTab";
 import { DEFAULT_SETTINGS } from "@/data/mockData";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3002";
 
 export default function App() {
   const [page, setPage] = useState("overview");
   const [time, setTime] = useState(new Date());
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [competitorRefresh, setCompetitorRefresh] = useState(0);
+  const [dateRange, setDateRange] = useState("7"); // default: 7 hari
 
   useEffect(() => {
     fetch(`${API_BASE}/settings`).then(r => r.json()).then(d => {
@@ -47,10 +48,10 @@ export default function App() {
   };
 
   const pages = {
-    overview:    <OverviewTab settings={settings} />,
-    revenue:     <RevenueTab />,
-    traffic:     <TrafficTab />,
-    students:    <StudentsTab />,
+    overview:    <OverviewTab settings={settings} dateRange={dateRange} />,
+    revenue:     <RevenueTab dateRange={dateRange} />,
+    traffic:     <TrafficTab dateRange={dateRange} />,
+    students:    <StudentsTab dateRange={dateRange} />,
     conversion:  <ConversionTab />,
     email:       <EmailTab />,
     health:      <SiteHealthTab settings={settings} />,
@@ -65,7 +66,7 @@ export default function App() {
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar page={page} setPage={setPage} />
       <main className="flex-1 flex flex-col overflow-hidden">
-        <Header page={page} time={time} />
+        <Header page={page} time={time} dateRange={dateRange} onDateRangeChange={setDateRange} />
         <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
           {pages[page]}
         </div>

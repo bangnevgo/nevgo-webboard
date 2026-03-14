@@ -9,7 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3002";
 
 const COLORS = ["#7c3aed", "#06b6d4", "#10b981", "#f59e0b", "#ec4899", "#3b82f6"];
 
-export function RevenueTab() {
+export function RevenueTab({ dateRange = "7" }) {
   const [today, setToday] = useState(null);
   const [weekly, setWeekly] = useState([]);
   const [products, setProducts] = useState([]);
@@ -19,13 +19,15 @@ export function RevenueTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
+    const d = dateRange;
     Promise.all([
-      fetch(`${API_BASE}/api/revenue/today`).then(r => r.json()),
-      fetch(`${API_BASE}/api/revenue/weekly`).then(r => r.json()),
-      fetch(`${API_BASE}/api/products/top`).then(r => r.json()),
-      fetch(`${API_BASE}/api/midtrans/summary`).then(r => r.json()),
-      fetch(`${API_BASE}/api/midtrans/payment-methods`).then(r => r.json()),
-      fetch(`${API_BASE}/api/midtrans/failed`).then(r => r.json()),
+      fetch(`${API_BASE}/api/revenue/today?days=${d}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/revenue/weekly?days=${d}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/products/top?days=${d}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/midtrans/summary?days=${d}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/midtrans/payment-methods?days=${d}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/midtrans/failed?days=${d}`).then(r => r.json()),
     ]).then(([t, w, p, ms, mm, mf]) => {
       setToday(t.error ? null : t);
       setWeekly(Array.isArray(w) ? w : []);

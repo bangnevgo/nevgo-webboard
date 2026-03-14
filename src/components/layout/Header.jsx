@@ -2,11 +2,18 @@ import { Bell } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { ALERTS_DATA, NAV } from "@/data/mockData";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
-
-export function Header({ page, time }) {
+export function Header({ page, time, dateRange, onDateRangeChange }) {
   const criticalCount = ALERTS_DATA.filter(a => a.level === "critical" || a.level === "high").length;
   const currentNav = NAV.find(n => n.id === page);
+
+  const DATE_OPTIONS = [
+    { value: "1",   label: "Last 24 hours" },
+    { value: "7",   label: "Last 7 days" },
+    { value: "30",  label: "Last 30 days" },
+    { value: "90",  label: "Last 3 months" },
+    { value: "180", label: "Last 6 months" },
+    { value: "365", label: "Last 1 year" },
+  ];
 
   return (
     <header className="flex-shrink-0 flex items-center justify-between px-6 py-4 bg-white dark:bg-zinc-900 border-b border-border">
@@ -20,10 +27,14 @@ export function Header({ page, time }) {
       </div>
       <div className="flex items-center gap-2.5">
         {page !== "settings" && (
-          <select className="text-xs bg-muted border border-border text-muted-foreground rounded-md px-3 py-1.5 outline-none cursor-pointer">
-            <option>Last 24 hours</option>
-            <option>Last 7 days</option>
-            <option>Last 30 days</option>
+          <select
+            value={dateRange}
+            onChange={e => onDateRangeChange(e.target.value)}
+            className="text-xs bg-muted border border-border text-muted-foreground rounded-md px-3 py-1.5 outline-none cursor-pointer"
+          >
+            {DATE_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
         )}
         <ThemeToggle />

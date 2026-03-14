@@ -70,11 +70,12 @@ app.post('/settings', (req, res) => {
 // Revenue hari ini
 app.get('/api/revenue/today', async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const days = parseInt(req.query.days) || 1;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    if (days === 1) since.setHours(0, 0, 0, 0);
     
     const { data: orders } = await getWooCommerce().get('orders', {
-      after: today.toISOString(),
+      after: since.toISOString(),
       status: 'completed',
       per_page: 100
     });
@@ -98,11 +99,11 @@ app.get('/api/revenue/today', async (req, res) => {
 // Revenue 7 hari
 app.get('/api/revenue/weekly', async (req, res) => {
   try {
-    const today = new Date();
-    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const days = parseInt(req.query.days) || 7;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     
     const { data: orders } = await getWooCommerce().get('orders', {
-      after: weekAgo.toISOString(),
+      after: since.toISOString(),
       status: 'completed',
       per_page: 100
     });
@@ -130,10 +131,11 @@ app.get('/api/revenue/weekly', async (req, res) => {
 // Top products
 app.get('/api/products/top', async (req, res) => {
   try {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const days = parseInt(req.query.days) || 7;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     
     const { data: orders } = await getWooCommerce().get('orders', {
-      after: weekAgo.toISOString(),
+      after: since.toISOString(),
       status: 'completed',
       per_page: 100
     });
@@ -410,14 +412,15 @@ app.get('/api/gsc/pages', async (req, res) => {
 
 app.get('/api/students/summary', async (req, res) => {
   try {
+    const days = parseInt(req.query.days) || 30;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    // Fetch semua completed orders 30 hari terakhir
+    // Fetch semua completed orders sesuai range
     const { data: orders } = await getWooCommerce().get('orders', {
-      after: monthAgo.toISOString(),
+      after: since.toISOString(),
       status: 'completed',
       per_page: 100,
     });
@@ -825,9 +828,10 @@ function getMidtransAuth() {
 // Summary: total transaksi, success rate, failed, revenue settlement
 app.get('/api/midtrans/summary', async (req, res) => {
   try {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const days = parseInt(req.query.days) || 7;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const { data: orders } = await getWooCommerce().get('orders', {
-      after: weekAgo.toISOString(),
+      after: since.toISOString(),
       per_page: 100,
     });
 
@@ -861,9 +865,10 @@ app.get('/api/midtrans/summary', async (req, res) => {
 // Payment method breakdown dari WooCommerce order meta
 app.get('/api/midtrans/payment-methods', async (req, res) => {
   try {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const days = parseInt(req.query.days) || 7;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const { data: orders } = await getWooCommerce().get('orders', {
-      after: weekAgo.toISOString(),
+      after: since.toISOString(),
       status: ['completed', 'processing'],
       per_page: 100,
     });
@@ -891,9 +896,10 @@ app.get('/api/midtrans/payment-methods', async (req, res) => {
 // Failed & cancelled transactions detail
 app.get('/api/midtrans/failed', async (req, res) => {
   try {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const days = parseInt(req.query.days) || 7;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const { data: orders } = await getWooCommerce().get('orders', {
-      after: weekAgo.toISOString(),
+      after: since.toISOString(),
       status: ['failed', 'cancelled', 'pending'],
       per_page: 50,
     });

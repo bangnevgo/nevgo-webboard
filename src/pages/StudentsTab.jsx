@@ -5,15 +5,16 @@ import { formatRp } from "@/lib/formatters";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3002";
 
-export function StudentsTab() {
+export function StudentsTab({ dateRange = "30" }) {
   const [summary, setSummary] = useState(null);
   const [trend, setTrend] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     Promise.all([
-      fetch(`${API_BASE}/api/students/summary`).then(r => r.json()),
-      fetch(`${API_BASE}/api/students/trend`).then(r => r.json()),
+      fetch(`${API_BASE}/api/students/summary?days=${dateRange}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/students/trend?days=${dateRange}`).then(r => r.json()),
     ]).then(([s, t]) => {
       setSummary(s.error ? null : s);
       setTrend(Array.isArray(t) ? t : []);
