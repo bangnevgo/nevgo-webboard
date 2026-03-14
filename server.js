@@ -805,3 +805,112 @@ ${analysis.slice(0, 3000)}`;
 });
 
 app.listen(3002, () => console.log('Settings server running on http://localhost:3002'));
+
+// ═══════════════════════════════════════════════════════
+//  MIDTRANS ENDPOINTS
+// ═══════════════════════════════════════════════════════
+
+function getMidtransAuth() {
+  let serverKey = '';
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+      serverKey = s?.connectionCredentials?.paymentGateway?.serverKey || '';
+    }
+  } catch {}
+  if (!serverKey) serverKey = process.env.MIDTRANS_SERVER_KEY || '';
+  return serverKey;
+}
+
+// Summary: total transaksi, success rate, failed, revenue settlement
+app.get('/api/midtrans/summary', async (req, res) => {
+  try {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const { data: orders } = await getWooCommerce().get('orders', {
+      after: weekAgo.toISOString(),
+      per_page: 100,
+    });
+
+    const summary = {
+      total: orders.length,
+      completed: orders.filter(o => o.status === 'completed').length,
+      processing: orders.filter(o => o.status === 'processing').length,
+      pending: orders.filter(o => o.status === 'pending').length,
+      cancelled: orders.filter(o => o.status === 'cancelled').length,
+      failed: orders.filter(o => o.status === 'failed').length,
+      refunded: orders.filter(o => o.status === 'refunded').length,
+      revenue_settled: orders
+        .filter(o => o.status === 'completed')
+        .reduce((s, o) => s + parseFloat(o.total), 0),
+      revenue_processing: orders
+        .filter(o => o.status === 'processing')
+        .reduce((s, o) => s + parseFloat(o.total), 0),
+    };
+
+    summary.success_rate = summary.total > 0
+      ? parseFloat(((summary.completed + summary.processing) / summary.total * 100).toFixed(1))
+      : 0;
+
+    res.json(summary);
+  } catch (error) {
+    console.error('Midtrans summary error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Payment method breakdown dari WooCommerce order meta
+app.get('/api/midtrans/payment-methods', async (req, res) => {
+  try {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const { data: orders } = await getWooCommerce().get('orders', {
+      after: weekAgo.toISOString(),
+      status: ['completed', 'processing'],
+      per_page: 100,
+    });
+
+    const methodMap = {};
+    orders.forEach(order => {
+      const method = order.payment_method_title || order.payment_method || 'Other';
+      if (!methodMap[method]) methodMap[method] = { name: method, count: 0, revenue: 0 };
+      methodMap[method].count += 1;
+      methodMap[method].revenue += parseFloat(order.total);
+    });
+
+    const total = orders.length || 1;
+    const methods = Object.values(methodMap)
+      .map(m => ({ ...m, percentage: parseFloat((m.count / total * 100).toFixed(1)) }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json(methods);
+  } catch (error) {
+    console.error('Midtrans payment methods error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Failed & cancelled transactions detail
+app.get('/api/midtrans/failed', async (req, res) => {
+  try {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const { data: orders } = await getWooCommerce().get('orders', {
+      after: weekAgo.toISOString(),
+      status: ['failed', 'cancelled', 'pending'],
+      per_page: 50,
+    });
+
+    const failed = orders.map(o => ({
+      id: o.id,
+      status: o.status,
+      total: parseFloat(o.total),
+      date: o.date_created,
+      customer: o.billing?.first_name + ' ' + o.billing?.last_name,
+      payment_method: o.payment_method_title || o.payment_method || '—',
+      items: o.line_items?.map(i => i.name).join(', '),
+    }));
+
+    res.json(failed);
+  } catch (error) {
+    console.error('Midtrans failed error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
