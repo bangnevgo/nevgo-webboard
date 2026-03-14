@@ -21,6 +21,7 @@ export default function App() {
   const [page, setPage] = useState("overview");
   const [time, setTime] = useState(new Date());
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [competitorRefresh, setCompetitorRefresh] = useState(0);
 
   useEffect(() => {
     fetch(`${API_BASE}/settings`).then(r => r.json()).then(d => {
@@ -53,10 +54,10 @@ export default function App() {
     conversion:  <ConversionTab />,
     email:       <EmailTab />,
     health:      <SiteHealthTab settings={settings} />,
-    competitors: <CompetitorsTab />,
+    competitors: <CompetitorsTab refreshTrigger={competitorRefresh} />,
     alerts:      <AlertsTab />,
     agents:      <AgentsTab />,
-    "ai-insight":<AIInsightTab settings={settings} />,
+    "ai-insight":<AIInsightTab settings={settings} onCompetitorSaved={() => setCompetitorRefresh(n => n + 1)} />,
     settings:    <SettingsTab settings={settings} onSettingsChange={handleSettingsChange} />,
   };
 

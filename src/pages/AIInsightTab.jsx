@@ -12,7 +12,7 @@ const AI_AGENTS = [
   { id: "pipeline", name: "Competitor Pipeline", color: "#ec4899", icon: Eye, desc: "Monitor kompetitor & situs se-niche LOAS Indonesia", systemPrompt: `Kamu adalah Competitor Intelligence Pipeline Agent untuk Nevgo Institute.`, suggestedCommands: ["Fokus ke kompetitor yang aktif di TikTok", "Cari kompetitor yang baru launch produk bulan ini", "Analisis keyword gap vs kompetitor utama"] },
 ];
 
-function AgentChat({ agent, liveData, apiKey, messages, setMessages }) {
+function AgentChat({ agent, liveData, apiKey, messages, setMessages, onCompetitorSaved }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -30,14 +30,30 @@ function AgentChat({ agent, liveData, apiKey, messages, setMessages }) {
     setInput("");
     setLoading(true);
     try {
+      const model = agent.id === "pipeline" ? "anthropic/claude-haiku-4-5:online" : "anthropic/claude-haiku-4-5";
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}`, "HTTP-Referer": import.meta.env.VITE_APP_URL || "http://localhost:5173" },
-        body: JSON.stringify({ model: "anthropic/claude-haiku-4-5", max_tokens: 2000, messages: [{ role: "system", content: agent.systemPrompt + buildContext() }, ...newMessages] }),
+        body: JSON.stringify({ model, max_tokens: 2000, messages: [{ role: "system", content: agent.systemPrompt + buildContext() }, ...newMessages] }),
       });
       const data = await response.json();
       const reply = data.choices?.[0]?.message?.content || "Tidak ada respons.";
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
+
+      // Auto-save competitor data jika agent pipeline
+      if (agent.id === "pipeline") {
+        const match = reply.match(/```json\n([\s\S]*?)\n```/);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[1]);
+            fetch(`${API_BASE}/api/competitors/save`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...parsed, analyzedAt: new Date().toISOString() }),
+            }).then(() => { if (onCompetitorSaved) onCompetitorSaved(); }).catch(() => {});
+          } catch {}
+        }
+      }
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "❌ Error: Gagal menghubungi AI. Cek koneksi." }]);
     }
@@ -231,7 +247,7 @@ export function AIInsightTab({ settings, onCompetitorSaved }) {
         </div>
         {agent.id === "pipeline"
           ? <PipelineRunner onCompetitorSaved={onCompetitorSaved} />
-          : <AgentChat agent={agent} liveData={liveData} apiKey={apiKey} messages={allMessages[activeAgent]} setMessages={setMessages} />
+          : <AgentChat agent={agent} liveData={liveData} apiKey={apiKey} messages={allMessages[activeAgent]} setMessages={setMessages} onCompetitorSaved={onCompetitorSaved} />
         }
       </SectionCard>
     </div>

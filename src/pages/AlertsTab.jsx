@@ -6,6 +6,7 @@ const levelColors = { critical: "#ef4444", high: "#f59e0b", medium: "#3b82f6", l
 
 export function AlertsTab() {
   const levels = ["critical", "high", "medium", "low"];
+  const totalAlerts = ALERTS_DATA.length;
   return (
     <div className="flex flex-col gap-4">
       {/* Summary bar */}
@@ -20,7 +21,7 @@ export function AlertsTab() {
             </div>
           );
         })}
-        <div className="ml-auto text-xs text-muted-foreground">Total: {ALERTS_DATA.length} alerts</div>
+        <div className="ml-auto text-xs text-muted-foreground">Total: {totalAlerts} alerts</div>
       </div>
 
       {/* Grouped by level */}
