@@ -1,13 +1,20 @@
 import { useState, useEffect } from "react";
 import { SectionCard, CardTitle } from "@/components/ui/SectionCard";
-import { TrendIndicator } from "@/components/ui/TrendIndicator";
 import { AreaChartWrapper } from "@/components/charts/AreaChartWrapper";
 import { BarChartWrapper } from "@/components/charts/BarChartWrapper";
-import { formatRp, formatRpCompact } from "@/lib/formatters";
+import { formatRpCompact } from "@/lib/formatters";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3002";
-
 const COLORS = ["#7c3aed", "#06b6d4", "#10b981", "#f59e0b", "#ec4899", "#3b82f6"];
+
+const RANGE_LABEL = {
+  "1":   "Hari Ini",
+  "7":   "7 Hari Terakhir",
+  "30":  "30 Hari Terakhir",
+  "90":  "3 Bulan Terakhir",
+  "180": "6 Bulan Terakhir",
+  "365": "1 Tahun Terakhir",
+};
 
 export function RevenueTab({ dateRange = "7" }) {
   const [today, setToday] = useState(null);
@@ -18,16 +25,18 @@ export function RevenueTab({ dateRange = "7" }) {
   const [midFailed, setMidFailed] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const rangeLabel = RANGE_LABEL[dateRange] || `${dateRange} Hari Terakhir`;
+  const revenueLabel = dateRange === "1" ? "Revenue Hari Ini" : `Revenue ${rangeLabel}`;
+
   useEffect(() => {
     setLoading(true);
-    const d = dateRange;
     Promise.all([
-      fetch(`${API_BASE}/api/revenue/today?days=${d}`).then(r => r.json()),
-      fetch(`${API_BASE}/api/revenue/weekly?days=${d}`).then(r => r.json()),
-      fetch(`${API_BASE}/api/products/top?days=${d}`).then(r => r.json()),
-      fetch(`${API_BASE}/api/midtrans/summary?days=${d}`).then(r => r.json()),
-      fetch(`${API_BASE}/api/midtrans/payment-methods?days=${d}`).then(r => r.json()),
-      fetch(`${API_BASE}/api/midtrans/failed?days=${d}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/revenue/today?days=${dateRange}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/revenue/weekly?days=${dateRange}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/products/top?days=${dateRange}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/midtrans/summary?days=${dateRange}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/midtrans/payment-methods?days=${dateRange}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/midtrans/failed?days=${dateRange}`).then(r => r.json()),
     ]).then(([t, w, p, ms, mm, mf]) => {
       setToday(t.error ? null : t);
       setWeekly(Array.isArray(w) ? w : []);
@@ -36,7 +45,7 @@ export function RevenueTab({ dateRange = "7" }) {
       setMidMethods(Array.isArray(mm) ? mm : []);
       setMidFailed(Array.isArray(mf) ? mf : []);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  }, [dateRange]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
@@ -51,18 +60,20 @@ export function RevenueTab({ dateRange = "7" }) {
   return (
     <div className="flex flex-col gap-5">
 
-      {/* ── SECTION 1: SALES PERFORMANCE (WooCommerce) ── */}
+      {/* ── SECTION 1: SALES PERFORMANCE ── */}
       <div className="flex items-center gap-2 px-1">
         <div className="w-1 h-4 rounded-full bg-violet-500" />
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Sales Performance — WooCommerce</p>
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+          Sales Performance — WooCommerce · {rangeLabel}
+        </p>
       </div>
 
       {/* KPI */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Revenue Hari Ini", value: revenue > 0 ? formatRpCompact(revenue) : "Rp 0", sub: `${transactions} transaksi`, color: "#7c3aed" },
+          { label: revenueLabel, value: revenue > 0 ? formatRpCompact(revenue) : "Rp 0", sub: `${transactions} transaksi`, color: "#7c3aed" },
           { label: "Avg Order Value", value: aov > 0 ? formatRpCompact(aov) : "–", sub: "per transaksi", color: "#06b6d4" },
-          { label: "Produk Terjual", value: products.length, sub: "7 hari terakhir", color: "#10b981" },
+          { label: "Produk Terjual", value: products.length, sub: rangeLabel, color: "#10b981" },
           { label: "Top Produk", value: products[0]?.name?.split(" ").slice(0, 2).join(" ") || "–", sub: `${products[0]?.sales || 0} terjual`, color: "#f59e0b" },
         ].map((c, i) => (
           <div key={i} className="bg-card border border-border rounded-xl px-5 py-5">
@@ -75,7 +86,10 @@ export function RevenueTab({ dateRange = "7" }) {
 
       {/* Revenue Trend Chart */}
       <SectionCard>
-        <CardTitle title="Revenue Trend — 7 Hari" sub="Revenue & jumlah transaksi harian (WooCommerce live)" />
+        <CardTitle
+          title={`Revenue Trend — ${rangeLabel}`}
+          sub="Revenue & jumlah transaksi harian (WooCommerce live)"
+        />
         {weekly.length > 0 ? (
           <AreaChartWrapper
             data={weekly}
@@ -84,14 +98,17 @@ export function RevenueTab({ dateRange = "7" }) {
             formatter={formatRpCompact}
           />
         ) : (
-          <p className="text-sm text-muted-foreground text-center py-10">Belum ada data transaksi minggu ini</p>
+          <p className="text-sm text-muted-foreground text-center py-10">Belum ada data transaksi untuk periode ini</p>
         )}
       </SectionCard>
 
       {/* Top Produk */}
       <div className="grid grid-cols-2 gap-4">
         <SectionCard>
-          <CardTitle title="Top Produk — 7 Hari" sub="Ranking by revenue (WooCommerce live)" />
+          <CardTitle
+            title={`Top Produk — ${rangeLabel}`}
+            sub="Ranking by revenue (WooCommerce live)"
+          />
           {products.length > 0 ? (
             <BarChartWrapper
               data={products}
@@ -106,7 +123,10 @@ export function RevenueTab({ dateRange = "7" }) {
         </SectionCard>
 
         <SectionCard>
-          <CardTitle title="Detail Produk" sub="Sales & revenue per produk (7 hari)" />
+          <CardTitle
+            title="Detail Produk"
+            sub={`Sales & revenue per produk · ${rangeLabel}`}
+          />
           <div className="flex flex-col gap-2">
             {products.length === 0 ? (
               <p className="text-sm text-muted-foreground">Belum ada data</p>
@@ -123,10 +143,12 @@ export function RevenueTab({ dateRange = "7" }) {
         </SectionCard>
       </div>
 
-      {/* ── SECTION 2: PAYMENT INTELLIGENCE (Midtrans) ── */}
+      {/* ── SECTION 2: PAYMENT INTELLIGENCE ── */}
       <div className="flex items-center gap-2 px-1 mt-2">
         <div className="w-1 h-4 rounded-full bg-cyan-500" />
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Payment Intelligence — Midtrans</p>
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+          Payment Intelligence — Midtrans · {rangeLabel}
+        </p>
       </div>
 
       {/* Midtrans KPI */}
@@ -150,7 +172,10 @@ export function RevenueTab({ dateRange = "7" }) {
       <div className="grid grid-cols-2 gap-4">
         {/* Payment Method Breakdown */}
         <SectionCard>
-          <CardTitle title="Payment Method Distribution" sub="Metode pembayaran 7 hari terakhir" />
+          <CardTitle
+            title="Payment Method Distribution"
+            sub={`Metode pembayaran · ${rangeLabel}`}
+          />
           {midMethods.length === 0 ? (
             <p className="text-sm text-muted-foreground">Belum ada data pembayaran</p>
           ) : (
@@ -174,9 +199,12 @@ export function RevenueTab({ dateRange = "7" }) {
           )}
         </SectionCard>
 
-        {/* Transaction Status Overview */}
+        {/* Transaction Status */}
         <SectionCard>
-          <CardTitle title="Transaction Status" sub="Status order 7 hari terakhir" />
+          <CardTitle
+            title="Transaction Status"
+            sub={`Status order · ${rangeLabel}`}
+          />
           {midSummary ? (
             <div className="flex flex-col gap-2.5">
               {[
@@ -202,7 +230,10 @@ export function RevenueTab({ dateRange = "7" }) {
       {/* Failed Transactions Detail */}
       {midFailed.length > 0 && (
         <SectionCard>
-          <CardTitle title="⚠ Failed / Cancelled / Pending Transactions" sub={`${midFailed.length} transaksi perlu perhatian — 7 hari terakhir`} />
+          <CardTitle
+            title="⚠ Failed / Cancelled / Pending Transactions"
+            sub={`${midFailed.length} transaksi perlu perhatian · ${rangeLabel}`}
+          />
           <table className="w-full border-collapse">
             <thead>
               <tr>
@@ -213,7 +244,7 @@ export function RevenueTab({ dateRange = "7" }) {
             </thead>
             <tbody>
               {midFailed.slice(0, 10).map((o, i) => {
-                const statusColor = o.status === 'failed' ? "#ef4444" : o.status === 'cancelled' ? "#f59e0b" : "#3b82f6";
+                const statusColor = o.status === "failed" ? "#ef4444" : o.status === "cancelled" ? "#f59e0b" : "#3b82f6";
                 return (
                   <tr key={i} className="border-b border-border/50">
                     <td className="text-xs font-mono text-muted-foreground px-2.5 py-2.5">#{o.id}</td>
