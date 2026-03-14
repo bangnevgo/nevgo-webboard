@@ -13,13 +13,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const SETTINGS_FILE = path.join(__dirname, 'settings.json');
 
-// WooCommerce API Client
-const WooCommerce = new WooCommerceRestApi({
-  url: process.env.WC_URL || 'https://nevgoinstitute.com',
-  consumerKey: process.env.WC_CONSUMER_KEY || 'ck_156812e6d17c7fab5c398b31799a2006b3a3b087',
-  consumerSecret: process.env.WC_CONSUMER_SECRET || 'cs_40346b624f7368ba82c5b3df83d578928c9ba294',
-  version: 'wc/v3'
-});
+// WooCommerce API Client — baca dari settings.json setiap request
+function getWooCommerce() {
+  let wc = {};
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+      wc = s?.connectionCredentials?.woocommerce || {};
+    }
+  } catch {}
+  return new WooCommerceRestApi({
+    url: wc.storeUrl || process.env.WC_URL || 'https://nevgoinstitute.com',
+    consumerKey: wc.consumerKey || process.env.WC_CONSUMER_KEY || '',
+    consumerSecret: wc.consumerSecret || process.env.WC_CONSUMER_SECRET || '',
+    version: 'wc/v3'
+  });
+}
 
 app.use(express.json());
 
@@ -64,7 +73,7 @@ app.get('/api/revenue/today', async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const { data: orders } = await WooCommerce.get('orders', {
+    const { data: orders } = await getWooCommerce().get('orders', {
       after: today.toISOString(),
       status: 'completed',
       per_page: 100
@@ -92,7 +101,7 @@ app.get('/api/revenue/weekly', async (req, res) => {
     const today = new Date();
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     
-    const { data: orders } = await WooCommerce.get('orders', {
+    const { data: orders } = await getWooCommerce().get('orders', {
       after: weekAgo.toISOString(),
       status: 'completed',
       per_page: 100
@@ -123,7 +132,7 @@ app.get('/api/products/top', async (req, res) => {
   try {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     
-    const { data: orders } = await WooCommerce.get('orders', {
+    const { data: orders } = await getWooCommerce().get('orders', {
       after: weekAgo.toISOString(),
       status: 'completed',
       per_page: 100
@@ -407,7 +416,7 @@ app.get('/api/students/summary', async (req, res) => {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     // Fetch semua completed orders 30 hari terakhir
-    const { data: orders } = await WooCommerce.get('orders', {
+    const { data: orders } = await getWooCommerce().get('orders', {
       after: monthAgo.toISOString(),
       status: 'completed',
       per_page: 100,
@@ -461,7 +470,7 @@ app.get('/api/students/summary', async (req, res) => {
 app.get('/api/students/trend', async (req, res) => {
   try {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const { data: orders } = await WooCommerce.get('orders', {
+    const { data: orders } = await getWooCommerce().get('orders', {
       after: weekAgo.toISOString(),
       status: 'completed',
       per_page: 100,
@@ -627,7 +636,7 @@ async function fetchNevgoData(settings) {
   // WooCommerce revenue 7 hari
   try {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const { data: orders } = await WooCommerce.get('orders', { after: weekAgo.toISOString(), status: 'completed', per_page: 100 });
+    const { data: orders } = await getWooCommerce().get('orders', { after: weekAgo.toISOString(), status: 'completed', per_page: 100 });
     data.woocommerce = {
       revenue7d: orders.reduce((s, o) => s + parseFloat(o.total), 0),
       transactions7d: orders.length,
@@ -795,4 +804,4 @@ ${analysis.slice(0, 3000)}`;
   }
 });
 
-app.listen(3001, () => console.log('Settings server running on http://localhost:3001'));
+app.listen(3002, () => console.log('Settings server running on http://localhost:3002'));

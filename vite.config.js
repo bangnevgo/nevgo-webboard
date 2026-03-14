@@ -10,9 +10,11 @@ export default defineConfig({
     },
   },
   server: {
+    port: 5175,
+    strictPort: true,
     proxy: {
       '/settings': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3002',
         changeOrigin: false,
       },
       '/api/uptimerobot': {
@@ -32,7 +34,7 @@ export default defineConfig({
         headers: { 'Accept': 'application/json' },
       },
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3002',
         changeOrigin: true,
       },
     },
