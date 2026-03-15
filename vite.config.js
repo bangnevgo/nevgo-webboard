@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5177,
+    port: 5200,
     strictPort: true,
     proxy: {
       '/settings': {

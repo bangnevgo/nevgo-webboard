@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Activity, DollarSign, Eye, Search, Server } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3002";
 
 const AI_AGENTS = [
   { id: "sales", name: "Sales Monitor", color: "#7c3aed", icon: DollarSign, desc: "Analisis revenue, transaksi, cart abandonment", systemPrompt: `Kamu adalah Sales Monitor Agent untuk Nevgo Institute, platform edukasi Law of Assumption (LOAS) di Indonesia. Kamu memiliki akses ke data WooCommerce (revenue, transaksi, produk) dan Google Analytics 4 (traffic, sessions). Produk utama: Mini Course (Rp 74K), Program Intensif, Ebook Bundle, Webinar Recording, Mentoring Session, Kelas Trainer. Jawab dalam Bahasa Indonesia. Berikan analisis konkret, actionable, dan ringkas. Jika data tidak tersedia, sampaikan dengan jujur.\n\nKONTEKS BISNIS GLOBAL:\n- Standar konversi industri edukasi online Indonesia: 1-3%\n- Jangan anggap "0 penjualan dalam sehari" sebagai krisis — evaluasi berdasarkan tren minimal 7 hari\n- Berikan peringatan KRITIS hanya jika tren negatif berlangsung lebih dari 7 hari berturut-turut\n- Benchmark normal: fluktuasi harian ±30% adalah wajar`, suggestedCommands: ["Analisis revenue hari ini", "Ada peluang upsell?", "Produk mana yang underperform?"] },
@@ -16,7 +16,34 @@ function AgentChat({ agent, liveData, apiKey, messages, setMessages, onCompetito
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const buildContext = () => liveData ? `\n\nDATA LIVE SAAT INI:\n${JSON.stringify(liveData, null, 2)}` : "";
+  const buildContext = () => {
+    if (!liveData || Object.keys(liveData).length === 0) return "";
+    let relevant = {};
+    if (agent.id === "sales") {
+      relevant = {
+        woocommerce: liveData.woocommerce,
+        midtrans:    liveData.midtrans,
+        students:    liveData.students,
+        ga4:         liveData.ga4 || liveData.ga4_status || "GA4 belum dikonfigurasi",
+      };
+    } else if (agent.id === "seo") {
+      relevant = {
+        gsc:         liveData.gsc || liveData.gsc_status || "GSC belum dikonfigurasi",
+        ga4_traffic: liveData.ga4 ? { sessions: liveData.ga4.sessions, pageViews: liveData.ga4.pageViews } : "GA4 belum dikonfigurasi",
+      };
+    } else if (agent.id === "traffic") {
+      relevant = {
+        ga4: liveData.ga4 || liveData.ga4_status || "GA4 belum dikonfigurasi",
+      };
+    } else if (agent.id === "health") {
+      relevant = {
+        woocommerce_status: liveData.woocommerce ? "WooCommerce online" : "WooCommerce tidak merespons",
+      };
+    } else {
+      relevant = liveData;
+    }
+    return `\n\nDATA LIVE SAAT INI:\n${JSON.stringify(relevant, null, 2)}`;
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -199,19 +226,36 @@ export function AIInsightTab({ settings, onCompetitorSaved }) {
   useEffect(() => {
     const fetchAll = async () => {
       const data = {};
+      const ga4Ok  = !!settings?.connectionCredentials?.ga4?.propertyId;
+      const gscOk  = !!settings?.connectionCredentials?.searchConsole?.siteUrl;
+
+      // WooCommerce
       try { const r = await fetch(`${API_BASE}/api/revenue/today`); if (r.ok) data.woocommerce = await r.json(); } catch {}
-      try {
-        const [rt, td, pg] = await Promise.all([fetch(`${API_BASE}/api/ga4/realtime`), fetch(`${API_BASE}/api/ga4/today`), fetch(`${API_BASE}/api/ga4/top-pages`)]);
-        if (rt.ok && td.ok && pg.ok) { const realtime = await rt.json(); const today = await td.json(); const pages = await pg.json(); data.ga4 = { activeUsers: realtime.activeUsers, ...today, topPages: pages }; }
-      } catch {}
-      try {
-        const [sum, kw] = await Promise.all([fetch(`${API_BASE}/api/gsc/summary`), fetch(`${API_BASE}/api/gsc/keywords`)]);
-        if (sum.ok && kw.ok) { const summary = await sum.json(); const keywords = await kw.json(); data.gsc = { ...summary, keywords }; }
-      } catch {}
+      // Students
+      try { const r = await fetch(`${API_BASE}/api/students/summary?days=7`); if (r.ok) data.students = await r.json(); } catch {}
+      // Midtrans
+      try { const r = await fetch(`${API_BASE}/api/midtrans/summary?days=7`); if (r.ok) data.midtrans = await r.json(); } catch {}
+      // GA4
+      if (ga4Ok) {
+        try {
+          const [rt, td, pg] = await Promise.all([fetch(`${API_BASE}/api/ga4/realtime`), fetch(`${API_BASE}/api/ga4/today`), fetch(`${API_BASE}/api/ga4/top-pages`)]);
+          if (rt.ok && td.ok && pg.ok) { const [realtime, today, pages] = await Promise.all([rt.json(), td.json(), pg.json()]); data.ga4 = { activeUsers: realtime.activeUsers, ...today, topPages: pages }; }
+        } catch {}
+      } else { data.ga4_status = "GA4 belum dikonfigurasi di Settings"; }
+      // GSC
+      if (gscOk) {
+        try {
+          const [sum, kw] = await Promise.all([fetch(`${API_BASE}/api/gsc/summary`), fetch(`${API_BASE}/api/gsc/keywords`)]);
+          if (sum.ok && kw.ok) { const [summary, keywords] = await Promise.all([sum.json(), kw.json()]); data.gsc = { ...summary, keywords }; }
+        } catch {}
+      } else { data.gsc_status = "GSC belum dikonfigurasi di Settings"; }
+
       setLiveData(data);
     };
     fetchAll();
-  }, []);
+    const t = setInterval(fetchAll, 60000);
+    return () => clearInterval(t);
+  }, [settings]);
 
   return (
     <div className="flex flex-col gap-5">

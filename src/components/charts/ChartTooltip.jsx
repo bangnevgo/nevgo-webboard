@@ -1,12 +1,16 @@
 export function ChartTooltip({ active, payload, label, formatter }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white dark:bg-zinc-800 border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
-      <p className="text-muted-foreground mb-1.5">{label}</p>
+    <div style={{ background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 8,
+      padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}>
+      <p style={{ fontSize: 10, color: "#6b6b6b", marginBottom: 6, letterSpacing: "0.03em" }}>{label}</p>
       {payload.map((p, i) => (
-        <p key={i} style={{ color: p.color }} className="font-semibold">
-          {p.name}: {formatter ? formatter(p.value) : new Intl.NumberFormat("id-ID").format(p.value)}
-        </p>
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: p.color, fontVariantNumeric: "tabular-nums" }}>
+            {formatter ? formatter(p.value) : new Intl.NumberFormat("id-ID").format(p.value)}
+          </span>
+        </div>
       ))}
     </div>
   );

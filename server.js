@@ -540,13 +540,38 @@ app.get('/api/competitors/data', async (req, res) => {
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
+// Helper: get Tavily key — dari settings.json atau fallback ke .env
+function getTavilyKey() {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+      const fromSettings = s?.connectionCredentials?.tavily?.apiKey;
+      if (fromSettings) return fromSettings;
+    }
+  } catch {}
+  return TAVILY_API_KEY || '';
+}
+
+// Helper: get OpenRouter key — dari settings.json atau fallback ke .env
+function getOpenRouterKey() {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+      const fromSettings = s?.connectionCredentials?.openrouter?.apiKey;
+      if (fromSettings) return fromSettings;
+    }
+  } catch {}
+  return OPENROUTER_API_KEY || '';
+}
+
 // Helper: Tavily Search
 async function tavilySearch(query) {
+  const apiKey = getTavilyKey();
   const res = await fetch('https://api.tavily.com/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      api_key: TAVILY_API_KEY,
+      api_key: apiKey,
       query,
       search_depth: 'advanced',
       include_answer: true,
@@ -573,7 +598,7 @@ async function callLLM(systemPrompt, userPrompt) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Authorization': `Bearer ${getOpenRouterKey()}`,
     },
     body: JSON.stringify({
       model: 'anthropic/claude-haiku-4-5',
@@ -677,8 +702,8 @@ async function sendWhatsApp(settings, message) {
 
 // MAIN ENDPOINT
 app.post('/api/pipeline/run', async (req, res) => {
-  if (!TAVILY_API_KEY) return res.status(400).json({ error: 'TAVILY_API_KEY tidak di-set di .env' });
-  if (!OPENROUTER_API_KEY) return res.status(400).json({ error: 'OPENROUTER_API_KEY tidak di-set di .env' });
+  if (!getTavilyKey()) return res.status(400).json({ error: 'Tavily API key belum diset. Buka Settings → API Connections → Tavily Search.' });
+  if (!getOpenRouterKey()) return res.status(400).json({ error: 'OpenRouter API key belum diset. Buka Settings → API Connections → OpenRouter AI.' });
 
   try {
     const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
@@ -812,6 +837,32 @@ ${analysis.slice(0, 3000)}`;
   }
 });
 
+// ═══════════════════════════════════════════════════════
+//  PAGESPEED PROXY
+//  Frontend calls /api/pagespeed/... → forward ke googleapis.com
+// ═══════════════════════════════════════════════════════
+
+app.get('/api/pagespeed/*', async (req, res) => {
+  try {
+    // Strip prefix /api/pagespeed → /pagespeedonline/v5/runPagespeed
+    const googlePath = req.path.replace('/api/pagespeed', '');
+    const queryString = new URLSearchParams(req.query).toString();
+    const targetUrl = `https://www.googleapis.com${googlePath}?${queryString}`;
+
+    const response = await fetch(targetUrl);
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error('PageSpeed proxy error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(3002, () => console.log('Settings server running on http://localhost:3002'));
 
 // ═══════════════════════════════════════════════════════
@@ -922,6 +973,126 @@ app.get('/api/midtrans/failed', async (req, res) => {
     res.json(failed);
   } catch (error) {
     console.error('Midtrans failed error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  TUTORLMS ENDPOINTS (via WordPress REST API)
+// ═══════════════════════════════════════════════════════
+
+function getLMSConfig() {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+      return s?.connectionCredentials?.lms || {};
+    }
+  } catch {}
+  return {};
+}
+
+async function fetchTutorLMS(endpoint) {
+  const lms = getLMSConfig();
+  const siteUrl  = (lms.siteUrl  || '').replace(/\/$/, '');
+  const apiKey    = lms.apiKey    || '';
+  const apiSecret = lms.apiSecret || '';
+  if (!siteUrl || !apiKey || !apiSecret) throw new Error('LMS credentials not configured');
+
+  const credentials = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+  const res = await fetch(`${siteUrl}/wp-json/tutor/v1/${endpoint}`, {
+    headers: {
+      'Authorization': `Basic ${credentials}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!res.ok) throw new Error(`TutorLMS API error: ${res.status}`);
+  return res.json();
+}
+
+// GET /api/lms/courses — semua course
+app.get('/api/lms/courses', async (req, res) => {
+  try {
+    const raw     = await fetchTutorLMS('courses?per_page=20');
+    const posts   = raw?.data?.posts || [];
+    const courses = posts.map(c => ({
+      id:       c.ID,
+      name:     c.post_title,
+      enrolled: c.additional_info?.course_settings?.[0]?.maximum_students || 0,
+      rating:   parseFloat(c.ratings?.rating_avg) || 0,
+      ratingCount: parseInt(c.ratings?.rating_count) || 0,
+      level:    c.additional_info?.course_level?.[0] || '',
+      category: c.course_category?.[0]?.name || '',
+      thumbnail: c.thumbnail_url || '',
+      status:   c.post_status,
+    }));
+    res.json(courses);
+  } catch (error) {
+    console.error('LMS courses error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/lms/students — semua siswa
+app.get('/api/lms/students', async (req, res) => {
+  try {
+    const raw      = await fetchTutorLMS('students?per_page=100');
+    const students = (raw?.data?.students || raw?.data || []).map(s => ({
+      id:        s.ID || s.id,
+      name:      s.display_name || s.name,
+      email:     s.user_email || s.email,
+      enrolled:  s.enrolled_courses || 0,
+      completed: s.completed_courses || 0,
+      joinedAt:  s.user_registered || s.joined_at,
+    }));
+    res.json(students);
+  } catch (error) {
+    console.error('LMS students error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/lms/progress?course_id=xxx — progress siswa per course
+app.get('/api/lms/progress', async (req, res) => {
+  try {
+    const courseId = req.query.course_id || '';
+    const endpoint = courseId
+      ? `course-progress?course_id=${courseId}&per_page=50`
+      : `course-progress?per_page=50`;
+    const data = await fetchTutorLMS(endpoint);
+    res.json(data?.data || []);
+  } catch (error) {
+    console.error('LMS progress error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/lms/summary — ringkasan untuk dashboard
+app.get('/api/lms/summary', async (req, res) => {
+  try {
+    const raw   = await fetchTutorLMS('courses?per_page=20');
+    const posts = raw?.data?.posts || [];
+
+    const courses = posts.map(c => ({
+      id:         c.ID,
+      name:       c.post_title,
+      rating:     parseFloat(c.ratings?.rating_avg) || 0,
+      ratingCount: parseInt(c.ratings?.rating_count) || 0,
+      category:   c.course_category?.[0]?.name || '',
+      level:      c.additional_info?.course_level?.[0] || '',
+    }));
+
+    const rated     = courses.filter(c => c.ratingCount > 0);
+    const avgRating = rated.length
+      ? (rated.reduce((sum, c) => sum + c.rating, 0) / rated.length).toFixed(1)
+      : '0.0';
+
+    res.json({
+      totalCourses: posts.length,
+      avgRating,
+      courses,
+    });
+  } catch (error) {
+    console.error('LMS summary error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

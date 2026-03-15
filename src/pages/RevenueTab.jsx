@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { SectionCard, CardTitle } from "@/components/ui/SectionCard";
+import { MetricCard } from "@/components/ui/MetricCard";
 import { AreaChartWrapper } from "@/components/charts/AreaChartWrapper";
 import { BarChartWrapper } from "@/components/charts/BarChartWrapper";
 import { formatRpCompact } from "@/lib/formatters";
+import { DollarSign, TrendingUp, ShoppingBag, Star } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3002";
 const COLORS = ["#7c3aed", "#06b6d4", "#10b981", "#f59e0b", "#ec4899", "#3b82f6"];
@@ -71,16 +73,12 @@ export function RevenueTab({ dateRange = "7" }) {
       {/* KPI */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: revenueLabel, value: revenue > 0 ? formatRpCompact(revenue) : "Rp 0", sub: `${transactions} transaksi`, color: "#7c3aed" },
-          { label: "Avg Order Value", value: aov > 0 ? formatRpCompact(aov) : "–", sub: "per transaksi", color: "#06b6d4" },
-          { label: "Produk Terjual", value: products.length, sub: rangeLabel, color: "#10b981" },
-          { label: "Top Produk", value: products[0]?.name?.split(" ").slice(0, 2).join(" ") || "–", sub: `${products[0]?.sales || 0} terjual`, color: "#f59e0b" },
+          { label: revenueLabel, value: revenue > 0 ? formatRpCompact(revenue) : "Rp 0", sub: `${transactions} transaksi`, color: "#7c3aed", icon: DollarSign },
+          { label: "Avg Order Value", value: aov > 0 ? formatRpCompact(aov) : "–", sub: "per transaksi", color: "#06b6d4", icon: TrendingUp },
+          { label: "Produk Terjual", value: products.length, sub: rangeLabel, color: "#10b981", icon: ShoppingBag },
+          { label: "Top Produk", value: products[0]?.name?.split(" ").slice(0, 2).join(" ") || "–", sub: `${products[0]?.sales || 0} terjual`, color: "#f59e0b", icon: Star },
         ].map((c, i) => (
-          <div key={i} className="bg-card border border-border rounded-xl px-5 py-5">
-            <p className="text-xs text-muted-foreground mb-2">{c.label}</p>
-            <p className="text-2xl font-extrabold tracking-tight" style={{ color: c.color }}>{c.value}</p>
-            <p className="text-[11px] text-muted-foreground mt-1">{c.sub}</p>
-          </div>
+          <MetricCard key={i} title={c.label} value={c.value} sub={c.sub} color={c.color} icon={c.icon} />
         ))}
       </div>
 
@@ -160,11 +158,7 @@ export function RevenueTab({ dateRange = "7" }) {
             { label: "Revenue Processing", value: formatRpCompact(midSummary.revenue_processing), sub: `${midSummary.processing} processing`, color: "#f59e0b" },
             { label: "Failed / Cancelled", value: midSummary.failed + midSummary.cancelled, sub: `${midSummary.pending} masih pending`, color: midSummary.failed + midSummary.cancelled > 0 ? "#ef4444" : "#10b981" },
           ].map((c, i) => (
-            <div key={i} className="bg-card border border-border rounded-xl px-5 py-5">
-              <p className="text-xs text-muted-foreground mb-2">{c.label}</p>
-              <p className="text-2xl font-extrabold tracking-tight" style={{ color: c.color }}>{c.value}</p>
-              <p className="text-[11px] text-muted-foreground mt-1">{c.sub}</p>
-            </div>
+            <MetricCard key={i} title={c.label} value={c.value} sub={c.sub} />
           ))}
         </div>
       )}

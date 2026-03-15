@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { SectionCard, CardTitle } from "@/components/ui/SectionCard";
+import { MetricCard } from "@/components/ui/MetricCard";
 import { AreaChartWrapper } from "@/components/charts/AreaChartWrapper";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3002";
@@ -50,10 +51,7 @@ export function TrafficTab({ dateRange = "7" }) {
           { label: `GSC Clicks · ${rangeLabel}`, value: gsc?.clicks?.toLocaleString("id-ID") || "–", color: "#7c3aed" },
           { label: "Avg Position", value: gsc ? `#${gsc.position}` : "–", color: "#f59e0b" },
         ].map((c, i) => (
-          <div key={i} className="bg-card border border-border rounded-xl px-5 py-5">
-            <p className="text-xs text-muted-foreground mb-2">{c.label}</p>
-            <p className="text-2xl font-extrabold tracking-tight" style={{ color: c.color }}>{c.value}</p>
-          </div>
+          <MetricCard key={i} title={c.label} value={c.value} />
         ))}
       </div>
 

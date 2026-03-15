@@ -127,6 +127,7 @@ export const NAV = [
   { id: "alerts", label: "Alerts", badge: 8 },
   { id: "agents", label: "Agent Status" },
   { id: "ai-insight", label: "AI Agent Insight" },
+  { id: "components", label: "🎨 Components" },
   { id: "settings", label: "Settings" },
 ];
 

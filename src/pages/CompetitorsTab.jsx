@@ -3,7 +3,7 @@ import { SectionCard, CardTitle } from "@/components/ui/SectionCard";
 import { Chip } from "@/components/ui/Chip";
 import { TrendIndicator } from "@/components/ui/TrendIndicator";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3002";
 
 export function CompetitorsTab({ refreshTrigger }) {
   const [data, setData] = useState(null);

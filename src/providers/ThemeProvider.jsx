@@ -1,22 +1,25 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
 const ThemeContext = createContext({
-  theme: "system",
+  theme: "dark",
   setTheme: () => {},
 });
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("theme") || "system"
+    () => localStorage.getItem("theme") || "dark"
   );
 
   useEffect(() => {
     const root = window.document.documentElement;
+    // Hapus semua class theme dulu
+    root.classList.remove("light", "dark");
+
     if (theme === "system") {
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      root.classList.toggle("dark", prefersDark);
+      root.classList.add(prefersDark ? "dark" : "light");
     } else {
-      root.classList.toggle("dark", theme === "dark");
+      root.classList.add(theme);
     }
     localStorage.setItem("theme", theme);
   }, [theme]);

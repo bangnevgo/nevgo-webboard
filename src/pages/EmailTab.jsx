@@ -1,4 +1,5 @@
 import { SectionCard, CardTitle } from "@/components/ui/SectionCard";
+import { MetricCard } from "@/components/ui/MetricCard";
 import { Chip } from "@/components/ui/Chip";
 import { EMAILS } from "@/data/mockData";
 import { formatRp } from "@/lib/formatters";
@@ -13,10 +14,7 @@ export function EmailTab() {
           { label: "List Size", value: "8,234", trend: 3, color: "#7c3aed" },
           { label: "Unsubscribe Rate", value: "0.8%", trend: -2, color: "#f59e0b" },
         ].map((c, i) => (
-          <div key={i} className="bg-card border border-border rounded-xl px-5 py-5">
-            <p className="text-xs text-muted-foreground mb-2">{c.label}</p>
-            <p className="text-2xl font-extrabold" style={{ color: c.color }}>{c.value}</p>
-          </div>
+          <MetricCard key={i} title={c.label} value={c.value} />
         ))}
       </div>
 
